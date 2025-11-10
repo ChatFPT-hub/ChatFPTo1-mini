@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192x192.png" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ChatFPT</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: #121212;
+      font-family: -apple-system, BlinkMacSystemFont, "ChatFPT", Roboto, sans-serif;
+      color: #e0e0e0;
+      display: flex; flex-direction: column;
+    }
+
+    header {
+      background: #1f1f1f;
+      padding: 12px 16px;
+      text-align: center;
+      font-weight: bold;
+      color: #d0d0d0;
+      border-bottom: 1px solid #3a3a3a;
+    }
+
+    main#chat {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 16px 20px 140px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      font-size: 15px;
+    }
+
+    main#chat > p {
+      margin: 0;
+      word-break: break-word;
+      max-width: 80%;
+      white-space: pre-wrap; /* сохранять переносы */
+      text-align: left;
+      animation: fadeIn 0.3s ease;
+    }
+
+    main#chat > hr {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      margin: 8px auto;
+      width: 90%;
+    }
+
+    #inputContainer {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 90%;
+      max-width: 720px;
+      background: #1f1f1f;
+      border: 1px solid #888;
+      border-radius: 8px;
+      padding: 8px 14px;
+      display: flex;
+      gap: 12px;
+      z-index: 10;
+    }
+
+    form#chatForm {
+      flex-grow: 1;
+      display: flex;
+    }
+
+    #inputField {
+      flex-grow: 1;
+      background: transparent;
+      border: none;
+      color: #eee;
+      font-size: 16px;
+      padding: 12px 8px;
+      outline: none;
+    }
+
+    #sendButton {
+  position: relative;
+  top: 2px;
+  background: transparent;
+  border: none;
+  color: #bbb;
+  font-size: 24px;
+  cursor: pointer;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  transition: color 0.3s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#sendButton svg {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+    #sendButton:disabled { color: #666; cursor: default; }
+
+    #stopButton {
+      position: fixed;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 52px;
+      height: 52px;
+      background: #3a3a3a;
+      border-radius: 50%;
+      border: 1px solid #999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 15;
+      box-shadow: 0 0 12px rgba(153,153,153,0.6);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    #stopButton.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    #stopButton div {
+      width: 20px;
+      height: 20px;
+      background: #ccc;
+      border-radius: 3px;
+    }
+
+    /* Сообщения бота во всю ширину */
+    .bot-message {
+      max-width: 100% !important;
+      white-space: normal;
+      word-break: break-word;
+      text-align: left;
+      animation: fadeIn 0.4s ease;
+    }
+
+    /* Сообщения пользователя */
+    .user-message {
+      max-width: 80%;
+      white-space: pre-wrap; /* сохранять переносы */
+      text-align: left;
+      animation: fadeIn 0.4s ease;
+    }
+
+    @media (max-width: 480px) {
+      #inputContainer {
+        width: 95%;
+        padding: 6px 12px;
+      }
+      #inputField {
+        font-size: 15px;
+        padding: 10px 6px;
+      }
+      #sendButton {
+        width: 40px; height: 40px;
+        font-size: 20px;
+      }
+      #stopButton {
+        width: 48px; height: 48px;
+      }
+      #stopButton div {
+        width: 18px; height: 18px;
+      }
+    }
+    .bot-message {
+  max-width: 100% !important;
+  white-space: normal; /* чтобы переносы были как в html */
+  word-break: break-word;
+  text-align: left;
+  animation: fadeIn 0.4s ease;
+}
+
+/* Внутренние параграфы чтобы был отступ */
+.bot-message p {
+  margin: 0 0 1em 0;
+  line-height: 1.4em;
+}
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+
+<header>СhatFPT</header>
+
+<main id="chat" role="log" aria-live="polite" aria-atomic="false"></main>
+
+<div id="inputContainer">
+  <form id="chatForm" autocomplete="off">
+    <input id="inputField" type="text" placeholder="Введите запрос..." autocomplete="off" autocorrect="off" autocapitalize="off" required />
+    <button id="sendButton" type="submit" disabled>
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="#bbb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M22 12L4 19l4-7-4-7 18 7z" />
+</svg>
+    </button>
+  </form>
+</div>
+
+<button id="stopButton" hidden><div></div></button>
+
+<script>
+const chat = document.getElementById('chat');
+const form = document.getElementById('chatForm');
+const input = document.getElementById('inputField');
+const sendBtn = document.getElementById('sendButton');
+const stopBtn = document.getElementById('stopButton');
+const inputContainer = document.getElementById('inputContainer');
+
+let fetching = false;
+let stopRequested = false;
+
+const GEMINI_API_KEY = "AIzaSyATMWp-AtCnW784zhWutEOc9RnV_rE9nhg";
+
+input.addEventListener('input', () => {
+  sendBtn.disabled = input.value.trim() === '';
+});
+
+const history = [];
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (fetching) return;
+
+  const userMessage = input.value.trim();
+  if (!userMessage) return;
+
+  await addUserMessage(userMessage);
+  history.push({ role: 'user', content: userMessage });
+
+  input.value = '';
+  sendBtn.disabled = true;
+  input.focus();
+
+  fetching = true;
+  stopRequested = false;
+  stopBtn.hidden = false;
+  stopBtn.classList.add('visible');
+  inputContainer.style.opacity = '0';
+  inputContainer.style.pointerEvents = 'none';
+
+  try {
+    const maxHistoryLength = 2000;
+    let prompt = '';
+    for (let i = history.length - 1; i >= 0; i--) {
+      if ((prompt.length + history[i].content.length) > maxHistoryLength) break;
+      prompt = history[i].content + "\n\n" + prompt;
+    }
+
+    const response = await fetchGemini(prompt.trim());
+    if (!stopRequested) {
+      await addBotMessage(response);
+      history.push({ role: 'assistant', content: response });
+    }
+  } catch (err) {
+    await addBotMessage('Ошибка: ' + err.message);
+  } finally {
+    fetching = false;
+    stopRequested = false;
+    stopBtn.classList.remove('visible');
+    stopBtn.hidden = true;
+    inputContainer.style.opacity = '1';
+    inputContainer.style.pointerEvents = 'auto';
+    input.focus();
+  }
+});
+
+stopBtn.addEventListener('click', () => {
+  if (fetching) stopRequested = true;
+});
+
+async function fetchGemini(text) {
+  const response = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + GEMINI_API_KEY,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [
+          { parts: [ { text: text } ] }
+        ]
+      })
+    }
+  );
+
+  if (!response.ok) throw new Error("HTTP " + response.status);
+  const data = await response.json();
+  return data?.candidates?.[0]?.content?.parts?.[0]?.text || "Нет ответа.";
+}
+
+async function addUserMessage(text) {
+  if (stopRequested) return;
+
+  const p = document.createElement('p');
+  p.classList.add('user-message');
+  p.style.opacity = '0';
+  p.style.transform = 'translateY(10px)';
+  p.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+
+  // Сначала добавляем в DOM, чтобы анимация сработала
+  chat.appendChild(p);
+  chat.appendChild(document.createElement('hr'));
+  scrollToBottom();
+
+  // Вставляем разметку как HTML (парсим markdown)
+  p.innerHTML = marked.parse(text.trim());
+
+  // Плавно показываем
+  setTimeout(() => {
+    p.style.opacity = '1';
+    p.style.transform = 'translateY(0)';
+  }, 10);
+
+  scrollToBottom();
+}
+
+async function addBotMessage(text) {
+  if (stopRequested) return;
+
+  const container = document.createElement('div'); // div вместо p
+  container.classList.add('bot-message');
+  container.style.opacity = '0';
+  container.style.transform = 'translateY(20px)';
+  container.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+
+  chat.appendChild(container);
+  chat.appendChild(document.createElement('hr'));
+  scrollToBottom();
+
+  setTimeout(() => {
+    container.style.opacity = '1';
+    container.style.transform = 'translateY(0)';
+  }, 10);
+
+  // Прямой рендер всего текста сразу с Markdown парсингом
+  container.innerHTML = marked.parse(text.trim());
+
+  scrollToBottom();
+}
+function scrollToBottom() {
+  chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
+}
+</script>
+</body>
+  </html>
